@@ -38,12 +38,6 @@ def extract_page(page_url):
                 course_tickers.append(course_ticker) 
                 course_names.append(course_name)
 
-        '''
-        demo_count += 1 
-        if demo_count > 25: 
-            print('success')  
-            break 
-        ''' 
     #trim first header  
     course_infos = course_infos[1:]
     return (course_infos)
@@ -62,6 +56,13 @@ def clean_course_info (course_info_set):
     #Step 2: SectionId, Credit 
     SectionID = []
     Credit = [] 
+    #Step 3: Class days, time and location 
+    Class_day =[]
+    Class_time = [] 
+    Classroom_name = [] 
+    Classroom_num = []
+    Instructor = [] 
+
     for each_info in course_info_set: 
         if each_info[0].startswith("Res") or each_info[0].startswith("IS"):
             #Handle starting with Restriction
@@ -82,9 +83,23 @@ def clean_course_info (course_info_set):
 
         SectionID.append(each_info[1])
         Credit.append(each_info[2])     
-    
-    print(SectionID, Credit)
-    print(len(SectionID), len(Credit))
+
+        #handle "to be arranged"
+        if each_info[3] == 'to' and each_info[4] == 'be' and each_info[5] == 'arranged':
+            Class_day.append('empty')
+            Class_time.append('empty')
+            Classroom_name.append('empty')
+        else: 
+            Class_day.append(each_info[3])
+            Class_time.append(each_info[4])
+            Classroom_name.append(each_info[5])
+
+        print(each_info[5], each_info[6])
+        #print(each_info[3], each_info[4], each_info[5])
+
+   
+    # print(Classroom_name)
+    #print(Classroom_num)
 
 clean_course_info(cse_extract)
 
