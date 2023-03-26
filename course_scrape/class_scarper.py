@@ -4,10 +4,10 @@ import requests
 from bs4 import BeautifulSoup
 
 
-cse_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/cse.html'
+cse_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/info.html'
 demo_count = 0 
 
-info_dictionary = ['Restr', 'SLN', 'ID', 'Cred', 'Meeting', 'Times', 'Bldg/Rm', 'Instructor', 'Status', 'Enrl/Lim', 'Grades', 'Fee', 'Other']
+info_dictionary = ['Restr', 'SLN', 'ID', 'Cred', 'Meeting', 'Times', 'Bldg/Rm', 'Instructor', 'Status', 'Enrl/Lim']
 
 #The function intakes the course schedule from UW and extracts (returns) all the text information 
 def extract_page(page_url):
@@ -37,10 +37,18 @@ def extract_page(page_url):
                 course_name = header_info[1].get_text()
                 course_tickers.append(course_ticker) 
                 course_names.append(course_name)
-
-    #trim first header  
+    
+    #trim first header 
     course_infos = course_infos[1:]
-    return (course_infos)
+    trim_set = []
+
+    print(course_infos[3])
+    total_class = len(course_infos)
+    for i in range (0, total_class):
+        if len(course_infos[i]) == 11:
+            trim_set.append(course_infos[i])
+
+    return trim_set
 
 cse_extract = extract_page(cse_win_url)
 
@@ -49,7 +57,6 @@ cse_extract = extract_page(cse_win_url)
 print('start')
 
 def clean_course_info (course_info_set):
-    
     #Step 1: Collect SLN, Restriction 
     SLN =[]
     Restr = []
@@ -62,6 +69,11 @@ def clean_course_info (course_info_set):
     Classroom_name = [] 
     Classroom_num = []
     Instructor = [] 
+
+    #Step 4: Status, Enrollment (Seat) 
+    Status = []
+    Fill = []
+    Limit = [] 
 
     for each_info in course_info_set: 
         if each_info[0].startswith("Res") or each_info[0].startswith("IS"):
@@ -80,9 +92,14 @@ def clean_course_info (course_info_set):
             #Normal cases
             Restr.append('Empty')
             SLN.append(each_info[0])
-
-        SectionID.append(each_info[1])
-        Credit.append(each_info[2])     
+        
+        SectionID.append(each_info[1])        
+        
+        #Handle #If Lecture -> note Lecture, if quiz -> section ID 
+        if each_info[2] != "QZ":
+            Credit.append("Lecture")
+        else: 
+            Credit.append(each_info[2])     
 
         #handle "to be arranged"
         if each_info[3] == 'to' and each_info[4] == 'be' and each_info[5] == 'arranged':
@@ -94,16 +111,28 @@ def clean_course_info (course_info_set):
             Class_time.append(each_info[4])
             Classroom_name.append(each_info[5])
 
-        print(each_info[5], each_info[6])
-        #print(each_info[3], each_info[4], each_info[5])
+        Classroom_num.append(each_info[6])
 
-   
-    # print(Classroom_name)
-    #print(Classroom_num)
+        #handle null 
+        if len(each_info[7]) < 5 :
+            Instructor.append("undecided")
+        else:
+            Instructor.append(each_info[7]) 
+        
 
-clean_course_info(cse_extract)
+        #
+        Status.append(each_info[8])
+        Fill.append(each_info[9])
+        Limit.append(each_info[10])
+
+    data_set = [SLN, Restr, SectionID, Credit, Class_day, Class_time, Classroom_name, Classroom_num, Instructor, Status, Fill, Limit]
+    return(data_set)
+
+
+final_output_data = clean_course_info(cse_extract)
 
 print('end')
+
 '''
 def assign_class(class_extract): 
     cnt = 0 
@@ -122,9 +151,8 @@ def assign_class(class_extract):
     return(class_extract[0])
 
 assign_class(cse_extract) 
+'''
 
-
-with open('output.csv', 'w', newline='') as file:
+with open('CSE_extract.csv', 'w', newline='') as file:
     writer = csv.writer(file)
-    writer.writerows(cse_extract)
-''' 
+    writer.writerows(final_output_data)
