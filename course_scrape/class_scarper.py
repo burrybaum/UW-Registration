@@ -1,26 +1,28 @@
 import csv
 import pandas as pd 
 import requests
+import numpy as np 
 from bs4 import BeautifulSoup
 
 
-cse_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/info.html'
-demo_count = 0 
+course_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/info.html'
 
-info_dictionary = ['Restr', 'SLN', 'ID', 'Cred', 'Meeting', 'Times', 'Bldg/Rm', 'Instructor', 'Status', 'Enrl/Lim']
+data_dictionary = ['SLN', 'Course_Name', 'Section', 'Limit', 'Class day', 'Class Time', 'Prereq', 'Required Section Amount']
+#Prereq is not includes in this version
 
 #The function intakes the course schedule from UW and extracts (returns) all the text information 
-def extract_page(page_url):
+def extract_catalog(page_url):
     ticker_response = requests.get(page_url)
     soup = BeautifulSoup(ticker_response.text, 'html.parser')
 
-    #set return values
-    course_names = [] 
+    #Scrape course ticker, name and information for all listed courses
     course_tickers = []
+    course_names = [] 
     course_infos = [] 
 
     all_cell = soup.find_all('tr')
     for each_tr in all_cell:
+        
         each_tr = each_tr.find('td')
         
         if each_tr.find('pre') is not None:
@@ -30,52 +32,42 @@ def extract_page(page_url):
 
         else :
             header_info = each_tr.find_all(['a']) 
-
             # filter that only contains header info 
             if len(header_info) > 1: 
                 course_ticker = header_info[0].get_text()
                 course_name = header_info[1].get_text()
                 course_tickers.append(course_ticker) 
                 course_names.append(course_name)
-    
+    #Course Pair 
+    course_pair = [course_tickers, course_names]    
     #trim first header 
     course_infos = course_infos[1:]
-    trim_set = []
+    return (course_infos, course_pair) 
 
-    print(course_infos[3])
-    total_class = len(course_infos)
-    for i in range (0, total_class):
-        if len(course_infos[i]) == 11:
-            trim_set.append(course_infos[i])
+web_extract = extract_catalog(course_win_url)
 
-    return trim_set
+#Step 1. extract each row from web 
+#Step 2. loop over each row, fetch [SLN, SectionID, ClassType, Class_day, Class_time]
+#Step 3. iterate each rows and fetch total class seats 
 
-cse_extract = extract_page(cse_win_url)
-
-
-#
 print('start')
 
-def clean_course_info (course_info_set):
-    #Step 1: Collect SLN, Restriction 
+def clean_course_info(web_extract):
+    all_information = web_extract
+
+    #Step 1: Collect SLN (Restriction for exception handle) 
     SLN =[]
     Restr = []
-    #Step 2: SectionId, Credit 
+    #Step 2: SectionId, ClassType 
     SectionID = []
-    Credit = [] 
-    #Step 3: Class days, time and location 
+    ClassType = [] 
+    #Step 3: Class days, Class time 
     Class_day =[]
     Class_time = [] 
-    Classroom_name = [] 
-    Classroom_num = []
-    Instructor = [] 
+    #Step 4: Total Seat 
+    Limit = []
 
-    #Step 4: Status, Enrollment (Seat) 
-    Status = []
-    Fill = []
-    Limit = [] 
-
-    for each_info in course_info_set: 
+    for each_info in all_information: 
         if each_info[0].startswith("Res") or each_info[0].startswith("IS"):
             #Handle starting with Restriction
             Restr.append(each_info[0])
@@ -83,7 +75,7 @@ def clean_course_info (course_info_set):
             SLN.append(each_info[0])
 
         elif each_info[0].startswith(">"):
-            #course starting wth > 
+            #course starting wth '>' 
             course_with_arrow = each_info[0]
             course_with_arrow = course_with_arrow[1:]
             Restr.append('Empty')
@@ -95,64 +87,63 @@ def clean_course_info (course_info_set):
         
         SectionID.append(each_info[1])        
         
-        #Handle #If Lecture -> note Lecture, if quiz -> section ID 
-        if each_info[2] != "QZ":
-            Credit.append("Lecture")
+        #Handle #If ClassType -> note Lecture, if quiz -> section ID 
+        print(each_info[2])
+        if each_info[2] == "QZ":
+            ClassType.append(each_info[2])
+        elif each_info[2] == "LB":
+            ClassType.append(each_info[2])
+        elif each_info[2] == "SM":
+            ClassType.append(each_info[2])
         else: 
-            Credit.append(each_info[2])     
+            ClassType.append("Lecture")     
 
         #handle "to be arranged"
         if each_info[3] == 'to' and each_info[4] == 'be' and each_info[5] == 'arranged':
             Class_day.append('empty')
             Class_time.append('empty')
-            Classroom_name.append('empty')
         else: 
             Class_day.append(each_info[3])
             Class_time.append(each_info[4])
-            Classroom_name.append(each_info[5])
 
-        Classroom_num.append(each_info[6])
+        #Collect seat by iterating each_info 
+        each_info_length = len(each_info)
+        for i in range(each_info_length-1): 
+            if '/' in each_info[i][-1]:
+                Limit.append(each_info[i+1])
+    
+    target_set = [SLN, SectionID, ClassType, Class_day, Class_time, Limit]
+    print(ClassType)
+    print(len(SLN), len(SectionID), len(ClassType), len(Class_day), len(Limit))
+    return(target_set)
 
-        #handle null 
-        if len(each_info[7]) < 5 :
-            Instructor.append("undecided")
-        else:
-            Instructor.append(each_info[7]) 
-        
+#Collect the target information (descriped in the above data dictionary)
+filter_data = clean_course_info(web_extract[0])
 
-        #
-        Status.append(each_info[8])
-        Fill.append(each_info[9])
-        Limit.append(each_info[10])
+#Run to add customized columns for NFT mint 
+def customize_for_contract(course_pair, filter_data): 
+    #Add [Course Name, Required Section Amount']
+    Course_Name = [] 
+    all_sectionID = filter_data[1]
+    
+    #print(filter_data[2])
+    course_pair_cnt = 0 
+    for each_sectionID in all_sectionID: 
+        '''
+        if each_sectionID == "A":
+            Course_Name.append(course_pair[course_pair_cnt])
+            course_pair_cnt += 1
+            print(course_pair_cnt)
+        '''
+    Section_Amount = [] 
 
-    data_set = [SLN, Restr, SectionID, Credit, Class_day, Class_time, Classroom_name, Classroom_num, Instructor, Status, Fill, Limit]
-    return(data_set)
-
-
-final_output_data = clean_course_info(cse_extract)
+    combine_data = np.concatenate((filter_data, Course_Name , Section_Amount))
+    return combine_data 
 
 print('end')
 
-'''
-def assign_class(class_extract): 
-    cnt = 0 
-    #class_extract[1]: course name, [2]: course_ticker, [3]: other info
-    class_infos = class_extract[2]
-    for class_info in class_infos:
-        #print(class_info[1])
-        # Logic: if course is A => apply class name and ticker, update each_class info until next A shows up         
-        if(class_info[1] == "A") :
-            cnt += 1 
-            print(cnt)
-            #print(each_info[2]) 
-        #print(each_class[0])
-        #print(each_class[1])
-        #print(each_class[2])
-    return(class_extract[0])
-
-assign_class(cse_extract) 
-'''
+final_data = customize_for_contract(web_extract[1], filter_data)
 
 with open('CSE_extract.csv', 'w', newline='') as file:
     writer = csv.writer(file)
-    writer.writerows(final_output_data)
+    writer.writerows(final_data)
