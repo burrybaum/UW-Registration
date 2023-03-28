@@ -5,7 +5,7 @@ import numpy as np
 from bs4 import BeautifulSoup
 
 
-course_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/info.html'
+course_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/cse.html'
 
 data_dictionary = ['SLN', 'Course_Name', 'Section', 'Limit', 'Class day', 'Class Time', 'Prereq', 'Required Section Amount']
 #Prereq is not includes in this version
@@ -39,7 +39,7 @@ def extract_catalog(page_url):
                 course_tickers.append(course_ticker) 
                 course_names.append(course_name)
     #Course Pair 
-    course_pair = [course_tickers, course_names]    
+    course_pair = [course_tickers, course_names]   
     #trim first header 
     course_infos = course_infos[1:]
     return (course_infos, course_pair) 
@@ -49,9 +49,6 @@ web_extract = extract_catalog(course_win_url)
 #Step 1. extract each row from web 
 #Step 2. loop over each row, fetch [SLN, SectionID, ClassType, Class_day, Class_time]
 #Step 3. iterate each rows and fetch total class seats 
-
-print('start')
-
 def clean_course_info(web_extract):
     all_information = web_extract
 
@@ -120,29 +117,60 @@ def clean_course_info(web_extract):
 #Collect the target information (descriped in the above data dictionary)
 filter_data = clean_course_info(web_extract[0])
 
+print('start')
+
 #Run to add customized columns for NFT mint 
 def customize_for_contract(course_pair, filter_data): 
     #Add [Course Name, Required Section Amount']
-    Course_Name = [] 
+    section_Amount = [] 
+    update_course_name = [] 
+    update_course_ticker = [] 
+
+    #split input parameters 
     all_sectionID = filter_data[1]
+    course_tickers = course_pair[0]
+    course_names = course_pair[1]
+
+    lecture_cnt = 0 
+    for element in all_sectionID: 
+        if "Lecture" in element: 
+            lecture_cnt += 1 
+ 
+    total_class_cnt = len(course_pair[0]) 
+    print(total_class_cnt)
+ 
+    #### 
+    class_cnt = len(all_sectionID)
+
+    pair_cnt = 0 
+    for i in range(class_cnt):  
+        #binding
+        #Fill same course untill the next class shows up 
+        if all_sectionID[i] == "A": 
+            #Update course name, ticker 
+            pair_cnt += 1 
+            update_course_ticker.append(course_tickers[(pair_cnt - 1)]) #Since the first value is always a Lecture
+            update_course_name.append(course_names[(pair_cnt - 1)])
+        else: 
+            update_course_ticker.append(course_tickers[(pair_cnt - 1)])
+            update_course_name.append(course_names[(pair_cnt - 1)])
+
+
+        #Fill same course untill the next class shows up 
+        #If one digit and the following is not, then does not have a section 
+
+        if len(all_sectionID[i]) == 1 and i+1 < class_cnt and len(all_sectionID[i+1]) == 2:
+             section_Amount.append('1')
+        #if the class has the lab, quiz, or seminar, indicate the number 
+        else:
+            section_Amount.append('0')
     
-    #print(filter_data[2])
-    course_pair_cnt = 0 
-    for each_sectionID in all_sectionID: 
-        '''
-        if each_sectionID == "A":
-            Course_Name.append(course_pair[course_pair_cnt])
-            course_pair_cnt += 1
-            print(course_pair_cnt)
-        '''
-    Section_Amount = [] 
-
-    combine_data = np.concatenate((filter_data, Course_Name , Section_Amount))
-    return combine_data 
-
-print('end')
+    print(len(update_course_name), len(update_course_ticker), len(all_sectionID), len(section_Amount))
+    combine_dataset = filter_data + [update_course_ticker] + [update_course_name] + [section_Amount]
+    return combine_dataset
 
 final_data = customize_for_contract(web_extract[1], filter_data)
+print('end')
 
 with open('CSE_extract.csv', 'w', newline='') as file:
     writer = csv.writer(file)
