@@ -4,11 +4,10 @@ import requests
 import numpy as np 
 from bs4 import BeautifulSoup
 
-course_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/cse.html'
+course_win_url = 'https://www.washington.edu/students/timeschd/WIN2023/info.html'
 
 data_dictionary = ['SLN', 'Course_Name', 'Section', 'Required Section Amount', 'Limit', 'Class day', 'Class Time']
 #Prereq is not includes in this version
-
 #The function intakes the course schedule from UW and extracts (returns) all the text information 
 def extract_catalog(page_url):
     ticker_response = requests.get(page_url)
@@ -42,8 +41,6 @@ def extract_catalog(page_url):
     #trim first header 
     course_infos = course_infos[1:]
     return (course_infos, course_pair) 
-
-web_extract = extract_catalog(course_win_url)
 
 #Step 1. extract each row from web 
 #Step 2. loop over each row, fetch [SLN, SectionID, ClassType, Class_day, Class_time]
@@ -143,10 +140,13 @@ def customize_for_contract(course_pair, filter_data):
         #Fill same course untill the next class shows up 
         #If one digit and the following is not, then does not have a section 
         if len(all_sectionID[i]) == 1 and i+1 < class_cnt and len(all_sectionID[i+1]) == 1:
-             section_Amount.append('0')
+            section_Amount.append('0')
         #if the class has the lab, quiz, or seminar, indicate the number 
         else:
             section_Amount.append('1')
+        
+        if len(all_sectionID[-1]) == 1: 
+            section_Amount[-1] = 0
 
         #filter ">"
         all_sln = filter_data[0]
@@ -163,8 +163,6 @@ def customize_for_contract(course_pair, filter_data):
          
 #The function intakes the filtered file, and convert into data frame, with a target order 
 def frame_data(final_data):
-    print(data_dictionary) 
-
     df = pd.DataFrame({'SLN': final_data[0], 
                        'Course Name': final_data[6],
                        'Course Ticker': final_data[5], 
@@ -176,15 +174,23 @@ def frame_data(final_data):
                        })
     return df
 
-#Run functions 
-print('start')
-#Collect the target information (descriped in the above data dictionary)
-filter_data = clean_course_info(web_extract[0])
-#Customize the filtered data to fit the NFT contract 
-final_data = customize_for_contract(web_extract[1], filter_data)
-#Convert to csv file 
-final_dataframe = frame_data(final_data)
 
-print('end')
+#Collect samples 
+sample_major_list = ['cse', 'info', 'econ', 'phil']
+time_periods = ['WIN2023', 'SPR2023']
 
-final_dataframe.to_csv('output.csv', index=False)
+for sample_major in sample_major_list: 
+    
+    for each_period in time_periods: 
+        course_url = 'https://www.washington.edu/students/timeschd/' + each_period + '/' + sample_major  +'.html'
+        #Run functions 
+        web_extract = extract_catalog(course_url)
+        #Collect the target information (descriped in the above data dictionary)
+        filter_data = clean_course_info(web_extract[0])
+        #Customize the filtered data to fit the NFT contract 
+        final_data = customize_for_contract(web_extract[1], filter_data)
+        #Convert to csv file format
+        final_dataframe = frame_data(final_data)
+        #Log in csv 
+        final_dataframe.to_csv('course_scrape/sample_csv/' + sample_major + '_' + each_period + '.csv', index=False)
+
